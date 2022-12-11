@@ -23,14 +23,17 @@ const (
 // which has the downside of expiring at some point. You can use the CHATGPT_JWT_TOKEN to set this token, or rely on the
 // interactive browser session that this script will open. (For this to work, chromium-browser needs to be installed.)
 type ChatGPTMessageSource struct {
-	client *chatgpt.ChatGPT
+	client      *chatgpt.ChatGPT
+	tokenGetter *InteractiveJWTTokenGetter
 }
 
 // Ensure we implement the MessageSource interface
 var _ MessageSource = (*ChatGPTMessageSource)(nil)
 
 func NewChatGPTMessageSource() (*ChatGPTMessageSource, error) {
-	source := ChatGPTMessageSource{}
+	source := ChatGPTMessageSource{
+		tokenGetter: NewInteractiveJWTTokenGetter(),
+	}
 
 	err := source.init()
 	if err != nil {
@@ -43,13 +46,13 @@ func NewChatGPTMessageSource() (*ChatGPTMessageSource, error) {
 func (source *ChatGPTMessageSource) getJWTToken() (string, error) {
 	// Try to get the token from the environment
 	token := os.Getenv(JWTTokenEnvName)
-	if token != "" && isJWTToken(token) {
+	if token != "" && source.tokenGetter.IsJWTToken(token) {
 		return token, nil
 	}
 
 	// Else get a token using an interactive browser session
 	fmt.Println("CHATGPT_JWT_TOKEN is not set, attempting to get a token using an interactive browser session")
-	token, err := chatGPTGetJWTTokenInteractive()
+	token, err := source.tokenGetter.GetToken()
 	if err != nil {
 		return "", errors.Wrap(err, "getting JWT token")
 	}
